@@ -1,0 +1,8 @@
+add_label_with_icon|big|`wMentor Rewards``|left|7786|
+add_spacer|small|
+add_textbox|Mentor rewards are not available on this server.|left|
+add_spacer|small|
+add_button|back2_apprentices|Back|noflags|0|0|
+add_button||Close|noflags|0|0|
+end_dialog|show_mentees|||
+add_quick_exit|

@@ -1,0 +1,6 @@
+*.out
+*.log
+data/
+gtps.conf
+items.dat
+resources/ctx/

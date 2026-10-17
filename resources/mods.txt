@@ -1,0 +1,16 @@
+# worn items with an effect ("mods"): item|name|message when put on|message when taken off|effects
+# effects (space separated): dj (double jump) speed=N (default 250) break=N (extra break range, tiles) build=N (extra build range)
+#   damage=N (punch damage, a Fist is 6) fx=N (punch effect id sent to the client)
+# items not listed still get the rules in src/main.cpp (mod_for): wings/capes double jump, Robinsons speed, pickaxes and hammers damage 8.
+2976|Eye Beam|Your eyes can reach further.|Your eyes go back to normal.|break=1 fx=1
+1542|Fishy|You hold a very dead fish.|The fish is gone.|break=1 fx=15
+10780|Giving Growaxe|A dark blade is in your hand.|Your hand is empty again.|fx=111
+818|Double Jump|You can jump once more in mid-air.|You're back on the ground.|dj
+3894|Speedy|You move faster.|You move at normal speed.|speed=310
+496|Speedy|You move faster.|You move at normal speed.|speed=310
+10132|Speedy Pendant|You move faster.|You move at normal speed.|speed=310
+1204|Focused Eyes|Your gaze sharpens.|Your eyes relax.|
+2388|Hammer Time|Hammer time!|Hammer time is over.|damage=8
+9058|Cursed Blade|A curse hums in your hand.|The curse lifts.|
+8924|Moon Charm|Luck is on your side.|Your luck runs out.|
+4748|Extra Reach|You can build a little farther.|You can't reach as far.|build=1

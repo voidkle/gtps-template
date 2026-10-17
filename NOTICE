@@ -1,0 +1,10 @@
+Third-party material in this repository
+
+third_party/enet   ENet (https://github.com/lsalzman/enet), MIT License, Copyright (c) 2002-2020 Lee Salzman,
+                   with the three changes Growtopia's network layer uses (new packet header, CRC32 checksums, range
+                   coder). The headers and the prebuilt libenet.a come from the gurotopia project
+                   (https://github.com/gurotopia/Gurotopia, Apache License 2.0).
+resources/store.txt  the store list, from gurotopia (Apache License 2.0).
+
+Growtopia is a trademark of its owner. This project is not affiliated with or endorsed by Ubisoft or Growtopia.
+It contains no game files: you supply your own items.dat.

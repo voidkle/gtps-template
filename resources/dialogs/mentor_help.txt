@@ -1,0 +1,8 @@
+add_label_with_icon|big|`wHelp``|left|7786|
+add_spacer|small|
+add_textbox|Mentoring is not built on this server yet.|left|
+add_spacer|small|
+add_button|back2_apprentices|Back|noflags|0|0|
+add_button||Close|noflags|0|0|
+end_dialog|show_mentorhelp|||
+add_quick_exit|

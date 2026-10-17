@@ -1,0 +1,12 @@
+set_default_color|`o
+add_label_with_icon|big|`wApprentices``|left|1366|
+add_spacer|small|
+add_textbox|You have no apprentices yet. Mentoring isn't built on this server.|left|
+add_spacer|small|
+add_button|rewards_UI|Milestone Rewards|noflags|0|0|
+add_button|helpmentor_UI|Help|noflags|0|0|
+add_spacer|small|
+add_button|back|Back|noflags|0|0|
+add_button||Close|noflags|0|0|
+end_dialog|show_mentees|||
+add_quick_exit|

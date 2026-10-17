@@ -1,0 +1,4 @@
+# hand item punch patterns: item id | extra reach in tiles | either "aim:N" (N tiles in a line along the direction you punch) or dx:dy offsets (dx flips with the way you face)
+# not in items.dat, so this is server knowledge: edit freely
+5480|2|aim:3
+2388|0|0:0|8

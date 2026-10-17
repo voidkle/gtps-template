@@ -1,0 +1,20 @@
+# copy to gtps.conf and edit, then: ./gtps.out [gtps.conf]
+# the address clients connect to (your PC's LAN or public IP)
+ip 192.168.1.10
+# ENet (game) port
+port 17091
+# the login website; below 1024 needs: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443  (or setcap on gtps.out)
+https_port 443
+# login site host: a name in the certificate that points to this PC (hosts file or DNS)
+loginurl www.growtopia1.com
+# 0 = the login page can't create new GrowIDs
+register 1
+# your own items.dat (version 1..27); not included
+items items.dat
+cert resources/ctx/server.crt
+key resources/ctx/server.key
+data_dir data
+# optional: store list, punch patterns, and the folder with mods.txt, dialogs/, achievements.txt
+store resources/store.txt
+punch resources/punch.txt
+resources resources
