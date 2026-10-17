@@ -1,4 +1,4 @@
-# gtps
+# GTPS Template
 
 A Growtopia private server written in C++20 from the protocol documentation, not from another server's code.
 It speaks the same login the real game uses, runs worlds, locks, trading, a store, vending machines and more, and
