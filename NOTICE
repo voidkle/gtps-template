@@ -8,3 +8,5 @@ resources/store.txt  the store list, from gurotopia (Apache License 2.0).
 
 Growtopia is a trademark of its owner. This project is not affiliated with or endorsed by Ubisoft or Growtopia.
 It contains no game files: you supply your own items.dat.
+
+lua/ is Lua 5.4.7 (https://www.lua.org), Copyright (C) 1994-2024 Lua.org, PUC-Rio, under the MIT license (see the notice in lua/lua.h).

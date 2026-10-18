@@ -152,7 +152,7 @@ static const char *PKT_NAME[] = {"STATE", "CALL_FUNCTION", "UPDATE_STATUS", "TIL
     "SPECIAL", "SEND_PARTICLE_EFFECT_V2", "ACTIVE_ARROW_TO_ITEM", "SELECT_TILE_INDEX", "SEND_PLAYER_TRIBUTE_DATA", "FTUE_SET_ITEM_TO_QUICK_INVENTORY", "PVE_NPC", "PVPCARD_BATTLE",
     "PVE_APPLY_PLAYER_DAMAGE", "PVE_NPC_POSITION_UPDATE", "SET_EXTRA_MODS", "ON_STEP_ON_TILE_MOD"};
 
-static bool g_hex = false, g_secrets = false;
+static bool g_hex = false, g_secrets = false, g_escape = false; // --escape: print bytes above 0x7e and backslashes as \xNN, so binary strings can be pasted back into code
 
 static std::string hexs(const u8 *p, size_t n, size_t max = 96)
 {
@@ -164,7 +164,7 @@ static std::string hexs(const u8 *p, size_t n, size_t max = 96)
 
 static std::string quote(const std::string &s)
 {
-    std::string o = "\""; for (char c : s) { if (c == '\n') o += "\\n"; else if (c == '"') o += "\\\""; else if ((u8)c < 32) o += "\\x" + hexs((const u8 *)&c, 1); else o += c; } return o + "\"";
+    std::string o = "\""; for (char c : s) { if (c == '\n') o += "\\n"; else if (c == '"') o += "\\\""; else if ((u8)c < 32 || (g_escape && ((u8)c > 126 || c == '\\'))) o += "\\x" + hexs((const u8 *)&c, 1); else o += c; } return o + "\"";
 }
 
 static std::string render_text(std::string t) // drops the secrets unless asked: passwords, tokens and device ids
@@ -263,7 +263,7 @@ int main(int argc, char **argv)
     for (int i = 2; i < argc; ++i)
     {
         std::string a = argv[i];
-        if (a == "--port" && i + 1 < argc) sport = atoi(argv[++i]); else if (a == "--hex") g_hex = true; else if (a == "--raw-secrets") g_secrets = true;
+        if (a == "--port" && i + 1 < argc) sport = atoi(argv[++i]); else if (a == "--hex") g_hex = true; else if (a == "--escape") g_escape = true; else if (a == "--raw-secrets") g_secrets = true;
         else if (a == "--stats") stats_only = true; else if (a == "--only" && i + 1 < argc) only = argv[++i]; else if (a == "--handshake") handshake = true;
         else if (a == "--ip" && i + 1 < argc) ipfilter = argv[++i]; else if (a == "--show-undecodable") show_bad = true;
     }

@@ -21,6 +21,9 @@ struct Account
     u16 clothes[10] = {};               // hair shirt pants feet face hand back mask necklace ances
     u32 skin = 0x8295C3FF;
     u16 backpack = 16;                  // inventory slots
+    std::vector<std::string> recent;    // recently visited worlds, newest first (the world menu lists them)
+    u32 cbits = 0;                      // Personal Settings bits, kept on the server and sent back at login (m_clientBits)
+    u8 only_friends = 0;                // Personal Settings: chat only from friends
     std::vector<std::string> my_worlds;
     std::string home;                   // /sethome
     std::set<i32> friends;              // user ids
@@ -91,6 +94,8 @@ struct Store
         f << "name " << a.name << "\nsalt " << a.salt << "\nhash " << a.hash << "\nuser " << a.user_id
           << "\ngems " << a.gems << "\nrole " << a.role << "\nskin " << a.skin << "\nbackpack " << a.backpack << "\ncreated " << a.created << "\nlevel " << a.level << "\nxp " << a.xp << "\nplayed " << a.played << "\nhome " << a.home << "\nstatus " << a.status << "\nlastseen " << a.last_seen << "\nquest " << a.quest_day << "\npresetcount " << a.preset_count << "\nbb " << a.bb_item << ' ' << a.bb_show << ' ' << a.bb_buying << ' ' << a.bb_price << ' ' << a.bb_peritem << "\nban " << a.ban_until << "\nbanreason " << a.ban_reason << "\n";
         f << "clothes"; for (u16 c : a.clothes) f << ' ' << c; f << "\n";
+        for (auto &w : a.recent) f << "recent " << w << "\n";
+        f << "cbits " << a.cbits << "\nonlyfriends " << (int)a.only_friends << "\n";
         for (auto &[id, n] : a.inv) f << "item " << id << ' ' << n << "\n";
         for (auto &w : a.my_worlds) f << "world " << w << "\n";
         for (i32 fr : a.friends) f << "friend " << fr << "\n";
@@ -111,6 +116,8 @@ struct Store
             if (k == "name") in >> a.name; else if (k == "salt") in >> a.salt; else if (k == "hash") in >> a.hash;
             else if (k == "user") in >> a.user_id; else if (k == "gems") in >> a.gems; else if (k == "role") in >> a.role;
             else if (k == "skin") in >> a.skin; else if (k == "backpack") in >> a.backpack; else if (k == "created") in >> a.created; else if (k == "level") in >> a.level; else if (k == "xp") in >> a.xp; else if (k == "played") in >> a.played; else if (k == "home") in >> a.home; else if (k == "ban") in >> a.ban_until; else if (k == "banreason") std::getline(in >> std::ws, a.ban_reason);
+            else if (k == "recent") { std::string w; in >> w; a.recent.push_back(w); }
+            else if (k == "cbits") in >> a.cbits; else if (k == "onlyfriends") { int v = 0; in >> v; a.only_friends = v; }
             else if (k == "clothes") for (u16 &c : a.clothes) in >> c;
             else if (k == "item") { int id, n; in >> id >> n; a.inv[id] = n; }
             else if (k == "world") { std::string w; in >> w; a.my_worlds.push_back(w); }

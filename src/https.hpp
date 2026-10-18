@@ -125,7 +125,7 @@ inline void serve(SSL *ssl, Config &cfg, Store &st)
     r.method = data.substr(0, sp1); std::string target = data.substr(sp1 + 1, sp2 - sp1 - 1);
     size_t q = target.find('?'); r.path = target.substr(0, q); if (q != std::string::npos) r.query = target.substr(q + 1);
     r.body = data.substr(hend + 4);
-    printf("[https] %s %s\n", r.method.c_str(), r.path.c_str());
+    LOG("[https] %s %s\n", r.method.c_str(), r.path.c_str());
     std::string out = route(r, cfg, st);
     for (size_t off = 0; off < out.size(); ) { int n = SSL_write(ssl, out.data() + off, out.size() - off); if (n <= 0) break; off += n; }
 }
@@ -148,7 +148,7 @@ inline void listener(Config &cfg, Store &st)
             timeval tv{10, 0}; setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
             SSL *ssl = SSL_new(ctx); SSL_set_fd(ssl, fd);
             if (SSL_accept(ssl) > 0) serve(ssl, cfg, st);
-            else { char ip[64] = "?"; sockaddr_in pa{}; socklen_t pl = sizeof pa; if (getpeername(fd, (sockaddr *)&pa, &pl) == 0) inet_ntop(AF_INET, &pa.sin_addr, ip, sizeof ip); unsigned long e = ERR_peek_last_error(); printf("[https] TLS handshake from %s failed: %s\n", ip, e ? ERR_reason_error_string(e) : "closed"); ERR_clear_error(); }
+            else { char ip[64] = "?"; sockaddr_in pa{}; socklen_t pl = sizeof pa; if (getpeername(fd, (sockaddr *)&pa, &pl) == 0) inet_ntop(AF_INET, &pa.sin_addr, ip, sizeof ip); unsigned long e = ERR_peek_last_error(); LOG("[https] TLS handshake from %s failed: %s\n", ip, e ? ERR_reason_error_string(e) : "closed"); ERR_clear_error(); }
             SSL_shutdown(ssl); SSL_free(ssl); close(fd);
         }).detach();
     }

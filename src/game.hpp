@@ -50,7 +50,7 @@ inline void bubble(Player *p, Player *about, const std::string &msg) { call(p->p
 inline void send_gems(Player *p)
 {
     Var gems = S.cfg.protocol >= 227 ? Var(I64{p->acct->gems}) : Var((i32)p->acct->gems);
-    call(p->peer, {"OnSetBux", gems, 1, 1});
+    call(p->peer, {"OnSetBux", gems, 1, 1, Vec3{0, 0, 0}});
 }
 
 inline std::vector<u8> inventory_blob(Account &a)

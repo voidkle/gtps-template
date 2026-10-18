@@ -1,5 +1,6 @@
 // gtps: a Growtopia private server written from the protocol docs in ../docs
 #include "game.hpp"
+#include "vanilla.hpp"
 #include "extras.hpp"
 #include <csignal>
 #include <zlib.h>
@@ -152,11 +153,15 @@ static void send_world_menu(Player *p)
 {
     std::map<std::string, int> counts;
     for (Player *q : S.players) if (q->stage == 2 && !q->ghost && !q->world.empty()) ++counts[q->world];
-    std::string menu = "add_filter|\nadd_heading|Top Worlds<ROW2>|\n";
-    for (auto &[n, c] : counts) menu += "add_floater|" + n + "|" + std::to_string(c) + "|0.5|3529161471\n";
-    if (!p->acct->my_worlds.empty()) { menu += "add_heading|My Worlds<CR>|\n"; for (auto &n : p->acct->my_worlds) menu += "add_floater|" + n + "|" + std::to_string(counts[n]) + "|0.5|2147418367\n"; }
-    call(p->peer, {"OnRequestWorldSelectMenu", menu, 1});
-    console(p, "Where would you like to go? (`w" + std::to_string(S.online()) + "`` online)");
+    Account &a = *p->acct;
+    std::string menu = "default|" + (a.recent.empty() ? std::string("START") : a.recent.front()) + "\nadd_filter|\nadd_heading|Random Worlds|\n";
+    auto floater = [&](const std::string &n, int count, const char *color) { menu += "add_floater|" + n + "|" + std::to_string(count) + "|0.5|" + color + "\n"; };
+    for (auto &[n, c] : counts) floater(n, c, "3529161471");                          // worlds with people in them
+    for (auto &n : a.my_worlds) floater(n, counts[n], "2147418367");                   // yours
+    if (!counts.count("START")) floater("START", 0, "3529161471");
+    if (!a.recent.empty()) { menu += "add_heading|Recently Visited Worlds<CR>|\n"; for (auto &n : a.recent) floater(n, counts[n], "3417414143"); }
+    call(p->peer, {"OnRequestWorldSelectMenu", menu});
+    console(p, "Where would you like to go? (`w" + thousands(S.online()) + "`` online)");
 }
 
 static void trade_end(Player *p, const std::string &why);
@@ -204,6 +209,8 @@ static void join_world(Player *p, std::string name)
 
     GamePacket h; h.type = 0x04; h.tileX = (i32)(now_ms() & 0x7fffffff);
     send_packet(p->peer, h, w->serialize(S.items));
+    send_world_preamble(p);
+    { auto &r = p->acct->recent; r.erase(std::remove(r.begin(), r.end(), name), r.end()); r.insert(r.begin(), name); if (r.size() > 10) r.resize(10); }
     auto others = S.in_world(name);
     for (Player *q : others)
     {
@@ -213,6 +220,9 @@ static void join_world(Player *p, std::string name)
     }
     call(p->peer, {"OnSpawn", spawn_text(p, true)}, -1, -1);
     send_clothing(p, p); send_billboard(p, p);
+    call(p->peer, {"OnDisabledParticleList", ""});
+    call(p->peer, {"OnMagicCompassTrackingItemIDChanged", U32{0}});
+    call(p->peer, {"OnClearItemTransforms"}, p->netid, 250);
     for (Player *q : others)
         if (q != p && (!p->ghost || q->acct->role >= 2)) { call(q->peer, {"OnSpawn", spawn_text(p, false)}, -1, -1); send_clothing(q, p); send_billboard(q, p); }
     int seen = 0; for (Player *q : others) if (q != p && !q->ghost) ++seen;
@@ -223,7 +233,7 @@ static void join_world(Player *p, std::string name)
     }
     console(p, "World `w" + name + "`` entered.  There are `w" + std::to_string(seen) + "`` other people here, `w" + std::to_string(S.online()) + "`` online.");
     sfx(p, "audio/door_open.wav");
-    if (w->owner) console(p, "`5[`w" + name + "`` `$World Locked`` by " + w->owner_name + "`5]``");
+    if (w->owner) console(p, "`5[`w" + name + "`` `$World Locked`` by " + w->owner_name + (w->owner == p->acct->user_id ? " (`2ACCESS GRANTED``)" : "") + "`5]``");
 }
 
 // ---------------------------------------------------------------- tiles
@@ -945,7 +955,7 @@ static void store_buy(Player *p, const std::string &item, const std::string &sel
         int have = tokens ? inv_count(a, 1486) : (int)std::min<i64>(a.gems, 1 << 30);
         if (have < cost) { call(p->peer, {"OnStorePurchaseResult", "You can't afford `0" + pr.name + "``!  You're `$" + std::to_string(cost - have) + "`` " + (tokens ? "`2Growtokens``" : "Gems") + " short."}); return; }
         int newslots = 0; for (auto &[id, n] : pr.items) if (id != 9412 && !inv_count(a, id)) ++newslots;
-        if ((int)a.inv.size() + newslots > a.backpack) { call(p->peer, {"OnStorePurchaseResult", "You don't have enough room in your backpack!"}); return; }
+        if (newslots > 0 && (int)a.inv.size() + newslots > a.backpack) { call(p->peer, {"OnStorePurchaseResult", "You don't have enough room in your backpack!"}); return; }
         if (tokens) inv_remove(a, 1486, cost); else a.gems -= cost;
         for (auto &[id, n] : pr.items)
         {
@@ -1099,7 +1109,7 @@ static void profile_return(Player *p, const std::string &text)
         d.quick_exit(); dialog(p, d.end("worn_clothes", "", "OK"));
     }
     else if (features_profile_button(p, b)) {}
-    else if (!b.empty() && b != "button_ok") printf("[wrench] %s pressed %s (not implemented)\n", p->name().c_str(), b.c_str());
+    else if (!b.empty() && b != "button_ok") LOG("[wrench] %s pressed %s (not implemented)\n", p->name().c_str(), b.c_str());
 }
 
 static void respawn(Player *p)
@@ -1187,11 +1197,16 @@ static void dialog_return(Player *p, const std::string &text)
 // ---------------------------------------------------------------- items.dat download
 static void send_items(Player *p)
 {
-    uLongf bound = compressBound(S.items.raw.size());
-    std::vector<u8> z(bound);
+    static std::vector<u8> z; // compressed once: the client asks for it whenever its items.dat differs from ours
+    if (z.empty())
+    {
+        uLongf bound = compressBound(S.items.raw.size()); z.resize(bound);
+        if (compress2(z.data(), &bound, S.items.raw.data(), S.items.raw.size(), 9) == Z_OK) z.resize(bound); else z.clear();
+        LOG("[items] compressed items.dat: %zu -> %zu bytes\n", S.items.raw.size(), z.size());
+    }
     GamePacket h; h.type = 0x10;
-    if (compress(z.data(), &bound, S.items.raw.data(), S.items.raw.size()) == Z_OK) { z.resize(bound); h.itemID = S.items.raw.size(); send_packet(p->peer, h, z); }
-    else { h.itemID = 0; send_packet(p->peer, h, S.items.raw); }
+    if (!z.empty()) { h.itemID = S.items.raw.size(); send_packet(p->peer, h, z); } else { h.itemID = 0; send_packet(p->peer, h, S.items.raw); }
+    LOG("[items] sent items.dat to %s (%zu bytes)\n", p->name().c_str(), z.empty() ? S.items.raw.size() : z.size());
 }
 
 // ---------------------------------------------------------------- chat and commands
@@ -1250,7 +1265,7 @@ static void nuke(Player *p, std::string name, bool on)
     World *w = load_world(name); w->nuked = on; w->dirty = true;
     if (on) for (Player *q : S.in_world(name)) if (q->acct->role < 2) kick_to_menu(q, "`4This world was nuked by a moderator.``");
     console(p, std::string(on ? "`2Nuked " : "`2Un-nuked ") + "`w" + name + "``.");
-    printf("[mod] %s %s %s\n", p->name().c_str(), on ? "nuked" : "un-nuked", name.c_str());
+    LOG("[mod] %s %s %s\n", p->name().c_str(), on ? "nuked" : "un-nuked", name.c_str());
 }
 
 static void ban(Player *p, const std::string &who, const std::string &dur, const std::string &reason)
@@ -1264,7 +1279,7 @@ static void ban(Player *p, const std::string &who, const std::string &dur, const
     S.store.save(*a);
     if (Player *t = find_player(a->name)) { call(t->peer, {"OnConsoleMessage", ban_text(*a)}); enet_peer_disconnect_later(t->peer, 0); }
     console(p, "`2Banned `w" + a->name + "``" + (hours <= 0 ? " permanently." : " for " + dur + " hour(s)."));
-    printf("[mod] %s banned %s (%s) %s\n", p->name().c_str(), a->name.c_str(), dur.c_str(), reason.c_str());
+    LOG("[mod] %s banned %s (%s) %s\n", p->name().c_str(), a->name.c_str(), dur.c_str(), reason.c_str());
 }
 
 static void command(Player *p, const std::string &line)
@@ -1379,11 +1394,12 @@ static void on_login_text(Player *p, const std::string &text)
         if (!a || a->user_id != atoi(user.c_str())) { send_action(p->peer, "logon_fail"); return; }
         if (is_banned(*a)) { send_action(p->peer, "log", "msg|" + ban_text(*a)); send_action(p->peer, "logon_fail"); return; }
         p->acct = a; p->stage = 2; p->joined_at = now_s(); kick_duplicate(p);
-        printf("[login] %s (user %d) from %s\n", a->name.c_str(), a->user_id, "client");
+        LOG("[login] %s (user %d) from %s\n", a->name.c_str(), a->user_id, "client");
+        send_login_preamble(p);
         call(p->peer, {"OnSuperMainStartAcceptLogonHrdxs47254722215a", U32{S.items.hash}, S.cfg.cdn_host, S.cfg.cdn_path,
                        "cc.cz.madkite.freedom org.aqua.gg idv.aqua.bulldog com.cih.gamecih2 com.cih.gamecih com.cih.game_cih cn.maocai.gamekiller com.gmd.speedtime org.dax.attack com.x0.strai.frep com.x0.strai.free org.cheatengine.cegui org.sbtools.gamehack com.skgames.traffikrider org.sbtoods.gamehaca com.skype.ralder org.cheatengine.cegui.xx.multi1458919170111 com.prohiro.macro me.autotouch.autotouch com.cygery.repetitouch.free com.cygery.repetitouch.pro com.proziro.zacro com.slash.gamebuster",
                        "proto=" + std::to_string(S.cfg.protocol) + "|choosemusic=audio/mp3/about_theme.mp3|active_holiday=0|wing_week_day=0|ubi_week_day=0|server_tick=" + std::to_string(now_ms() & 0x7fffffff) +
-                       "|clash_active=0|drop_lavacheck_faster=1|isPayingUser=0|usingStoreNavigation=1|enableInventoryTab=1|bigBackpack=1",
+                       "|clash_active=0|drop_lavacheck_faster=1|isPayingUser=0|usingStoreNavigation=1|enableInventoryTab=1|bigBackpack=1|m_clientBits=" + std::to_string(a->cbits),
                        U32{0}});
         return;
     }
@@ -1394,16 +1410,26 @@ static void enter_game(Player *p)
 {
     Account &a = *p->acct;
     int fon = 0; for (i32 uid : a.friends) if (online_user(uid)) ++fon;
-    console(p, "Welcome back, `w" + a.name + "``. " + (fon ? "`2" + std::to_string(fon) + "`` friend(s) online." : "No friends are online."));
+    send_emoticons(p);
+    console(p, "Welcome back, `w`w" + a.name + "````. " + (fon == 1 ? "`w1`` friend is online." : fon ? "`w" + std::to_string(fon) + "`` friends are online." : "No friends are online."));
     friend_alert(p, true);
+    if (a.cbits & 0x400) console(p, "`5Personal Settings active:`` `#Punch Joystick enabled``");
+    call(p->peer, {"OnPaw2018SkinColor1Changed", 0});
+    call(p->peer, {"OnPaw2018SkinColor2Changed", 0});
     send_inventory(p);
     send_gems(p);
+    call(p->peer, {"OnSetPearl", 0, 1});
+    call(p->peer, {"OnSetVouchers", 0});
     call(p->peer, {"SetHasGrowID", U32{1}, a.name, ""});
+    call(p->peer, {"SetHasAccountSecured", U32{1}});
     time_t tt = time(nullptr); tm lt; localtime_r(&tt, &lt);
-    call(p->peer, {"OnTodaysDate", lt.tm_mon + 1, lt.tm_mday, U32{0}, U32{0}});
+    call(p->peer, {"OnTodaysDate", lt.tm_mon + 1, lt.tm_mday, U32{a.xp}, U32{a.level}});
+    call(p->peer, {"SetShowChatOnlyFromFriends", U32{a.only_friends}});
+    call(p->peer, {"OnRequestHoustonPricing"});
     send_world_menu(p);
+    call(p->peer, {"OnClearItemTransforms"}, 0, 250);
     GamePacket ping; ping.type = 0x16; send_packet(p->peer, ping);
-    call(p->peer, {"OnSetFeatureEnableFlags", "EA8DEAcGAgEOBQgKCQ0MEQQ="});
+    call(p->peer, {"OnSetFeatureEnableFlags", FEATURE_FLAGS});
 }
 
 #include "features.hpp"
@@ -1413,7 +1439,7 @@ static void on_action(Player *p, const std::string &text)
 {
     std::string action = field(text, "action");
     if (action == "enter_game") { enter_game(p); }
-    else if (action == "refresh_item_data") send_items(p);
+    else if (action == "refresh_item_data") { console(p, "One moment, updating item data..."); send_items(p); }
     else if (action == "join_request") join_world(p, field(text, "name"));
     else if (action == "quit_to_exit") { leave_world(p); send_world_menu(p); }
     else if (action == "quit") enet_peer_disconnect_later(p->peer, 0);
@@ -1421,10 +1447,13 @@ static void on_action(Player *p, const std::string &text)
     else if (action == "trade_started") trade_refresh(p);
     else if (action == "friends") social_portal(p);
     else if (action == "store") store_tab(p, 0);
+    else if (action == "killstore") {}
     else if (action == "storenavigate" || action == "buy") store_buy(p, field(text, "item"), field(text, "selection"));
     else if (action == "growid") { Dialog d; d.label_icon("`wYour GrowID``", 18).spacer().text("`oYou are logged in as `w" + p->name() + "``."); d.quick_exit(); dialog(p, d.end("growid_info", "", "OK")); }
     else if (action == "gohomeworld") { if (!p->acct->my_worlds.empty()) join_world(p, p->acct->my_worlds.front()); else { console(p, "`oYou don't own a world yet.``"); call(p->peer, {"OnFailedToEnterWorld"}); } }
-    else if (action == "setFilter" || action == "setchatFilter" || action == "setOnlyFriendsChat" || action == "setGDPR" || action == "setDeath" || action == "setRespawn" ||
+    else if (action == "setFilter") { p->acct->cbits = (u32)strtoul(field(text, "cbits").c_str(), nullptr, 10); }
+    else if (action == "setOnlyFriendsChat") { p->acct->only_friends = atoi(field(text, "show").c_str()) != 0; }
+    else if (action == "setchatFilter" || action == "setGDPR" || action == "setDeath" || action == "setRespawn" ||
              action == "setRoleSkin" || action == "setRoleIcon" || action == "world_button" || action == "refresh_player_tribute_data" || action == "get_seed_diary_data" || action == "itemfavourite") {} // settings the client keeps itself
     else if (action == "mod_trade")
     {
@@ -1449,7 +1478,7 @@ static void on_action(Player *p, const std::string &text)
     else if (action == "setSkin") { p->acct->skin = (u32)strtoull(field(text, "color").c_str(), nullptr, 10); if (!p->world.empty()) broadcast(p->world, [&](Player *q) { send_clothing(q, p); }); }
     else if (action == "input") { size_t k = text.find("|text|"); chat(p, k == std::string::npos ? "" : text.substr(k + 6)); }
     else if (features_action(p, action, text)) {}
-    else printf("[action] %s unhandled: %s\n", p->name().c_str(), action.c_str());
+    else LOG("[action] %s unhandled: %s\n", p->name().c_str(), action.c_str());
 }
 
 // ---------------------------------------------------------------- game packets
@@ -1468,7 +1497,7 @@ static void on_packet(Player *p, const u8 *d, size_t n)
             if (!p->ghost) broadcast(p->world, [&](Player *q) { send_packet(q->peer, pk, {}, false); }, p);
             break;
         }
-        case 0x03: if (w && p->acct->clothes[5] == 5480) printf("[punch] %s item %d tile %d,%d pos %.0f,%.0f flags %x\n", p->name().c_str(), pk.itemID, pk.tileX, pk.tileY, pk.posX, pk.posY, pk.flags);
+        case 0x03: if (w && p->acct->clothes[5] == 5480) LOG("[punch] %s item %d tile %d,%d pos %.0f,%.0f flags %x\n", p->name().c_str(), pk.itemID, pk.tileX, pk.tileY, pk.posX, pk.posY, pk.flags);
                    if (w) { if (pk.itemID == 18) punch(p, *w, pk); else if (pk.itemID == 32) wrench_tile(p, *w, pk); else place(p, *w, pk); } break;
         case 0x07: if (w) enter_door(p, *w, pk); break;
         case 0x0a: if (!convert_locks(p, pk.itemID)) wear(p, pk.itemID); break;
@@ -1476,7 +1505,7 @@ static void on_packet(Player *p, const u8 *d, size_t n)
         case 0x12: if (w && !p->ghost) { pk.netID = p->netid; broadcast(p->world, [&](Player *q) { send_packet(q->peer, pk); }, p); } break; // the icon state (busy, typing...) goes to the others
         case 0x16: break;
         case 0x15: case 0x1a: case 0x18: break;
-        default: printf("[packet] %s sent unhandled game packet 0x%02x\n", p->name().c_str(), pk.type);
+        default: LOG("[packet] %s sent unhandled game packet 0x%02x\n", p->name().c_str(), pk.type);
     }
 }
 
@@ -1508,15 +1537,15 @@ static void run_command_file(const std::string &path)
         if (cmd == "passwd")   // passwd <name> <new password>
         {
             std::string pw; in >> pw; std::lock_guard g(S.store.mu); Account *acc = S.store.find(who);
-            if (!acc || pw.size() < 6) { printf("[console] passwd: no such account or password under 6 characters\n"); continue; }
+            if (!acc || pw.size() < 6) { LOG("[console] passwd: no such account or password under 6 characters\n"); continue; }
             acc->salt = random_hex(16); acc->hash = Store::pbkdf2(pw, acc->salt); S.store.save(*acc);
-            printf("[console] password changed for %s\n", acc->name.c_str()); continue;
+            LOG("[console] password changed for %s\n", acc->name.c_str()); continue;
         }
         Player *t = nullptr; for (Player *q : S.players) if (q->stage == 2 && q->acct && lower(q->name()) == lower(who)) t = q;
-        if (!t) { printf("[console] %s is not online: %s\n", who.c_str(), l.c_str()); continue; }
-        if (cmd == "giveto") { int id = 0, n = 1; in >> id >> n; if (S.items.get(id) && id > 0) { inv_add(*t->acct, id, n); send_inventory(t); console(t, "`2You received `w" + std::to_string(n) + " " + S.items.get(id)->name + "``.``"); printf("[console] gave %d x%d to %s\n", id, n, who.c_str()); } }
-        else if (cmd == "gems") { long n = 0; in >> n; t->acct->gems += n; send_gems(t); printf("[console] gems %ld to %s\n", n, who.c_str()); }
-        else printf("[console] unknown: %s\n", l.c_str());
+        if (!t) { LOG("[console] %s is not online: %s\n", who.c_str(), l.c_str()); continue; }
+        if (cmd == "giveto") { int id = 0, n = 1; in >> id >> n; if (S.items.get(id) && id > 0) { inv_add(*t->acct, id, n); send_inventory(t); console(t, "`2You received `w" + std::to_string(n) + " " + S.items.get(id)->name + "``.``"); LOG("[console] gave %d x%d to %s\n", id, n, who.c_str()); } }
+        else if (cmd == "gems") { long n = 0; in >> n; t->acct->gems += n; send_gems(t); LOG("[console] gems %ld to %s\n", n, who.c_str()); }
+        else LOG("[console] unknown: %s\n", l.c_str());
     }
 }
 
@@ -1560,7 +1589,7 @@ int main(int argc, char **argv)
                 case ENET_EVENT_TYPE_DISCONNECT:
                 {
                     Player *p = S.player_of(ev.peer); if (!p) break;
-                    if (p->acct) { if (p->stage == 2) { friend_alert(p, false); p->acct->played += now_s() - p->joined_at; p->acct->last_seen = now_s(); } leave_world(p); std::lock_guard g(S.store.mu); S.store.save(*p->acct); printf("[logout] %s\n", p->name().c_str()); }
+                    if (p->acct) { if (p->stage == 2) { friend_alert(p, false); p->acct->played += now_s() - p->joined_at; p->acct->last_seen = now_s(); } leave_world(p); std::lock_guard g(S.store.mu); S.store.save(*p->acct); LOG("[logout] %s\n", p->name().c_str()); }
                     S.players.erase(std::remove(S.players.begin(), S.players.end(), p), S.players.end());
                     delete p; ev.peer->data = nullptr; break;
                 }
