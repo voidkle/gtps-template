@@ -120,3 +120,8 @@ removed) is the most useful bug report.
 
 MIT, see [LICENSE](LICENSE). Third-party parts are listed in [NOTICE](NOTICE). The guide at
 [voidkle.github.io/gtps-guide](https://voidkle.github.io/gtps-guide/) has its own license.
+
+## gtbot: scripting bots with Lua
+
+`make tools/gtbot.out` builds a scriptable client (Lua 5.4 is vendored in `lua/`). Bots log in through the real flow and are driven by a Lua
+script; see [`examples/README.md`](examples/README.md) for the API and `examples/break_down.lua` for a script.

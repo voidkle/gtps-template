@@ -1,5 +1,9 @@
 #pragma once
 #include "proto.hpp"
+#include <ctime>
+
+// a printf with a time stamp in front (server log lines)
+#define LOG(...) do { time_t t_ = time(nullptr); tm lt_; localtime_r(&t_, &lt_); char ts_[16]; strftime(ts_, sizeof ts_, "%H:%M:%S", &lt_); printf("%s ", ts_); printf(__VA_ARGS__); } while (0)
 #include <fstream>
 #include <map>
 

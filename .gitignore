@@ -4,3 +4,5 @@ data/
 gtps.conf
 items.dat
 resources/ctx/
+*.a
+*.o

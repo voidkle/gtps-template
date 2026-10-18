@@ -54,7 +54,22 @@ int main(int argc, char **argv)
                     if (!clean.empty() && clean[0] == '@') clean.erase(0, 1);
                     seen[clean] = atoi(v[1].c_str() + q + 6);
                 }
-                else if (fn == "OnSpawn" && v[1].find("type|local") != std::string::npos) { size_t q = v[1].find("netID|"); netid = atoi(v[1].c_str() + q + 6); printf("in %s as netID %d\n", world.c_str(), netid); }
+                else if (fn == "OnSpawn" && v[1].find("type|local") != std::string::npos) { size_t q = v[1].find("netID|"); netid = atoi(v[1].c_str() + q + 6); printf("in %s as netID %d\n", world.c_str(), netid);
+                    if (const char *walk = getenv("BOT_WALK")) // BOT_WALK=<pixels>: step that far to the right once in
+                    {
+                        float px = 0, py = 0; size_t xy = v[1].find("posXY|"); if (xy != std::string::npos) sscanf(v[1].c_str() + xy + 6, "%f|%f", &px, &py);
+                        GamePacket h; h.type = 0x00; h.netID = netid; h.posX = px + atof(walk); h.posY = py; h.flags = 0x20; send_packet(peer, h); printf("walked to %.0f,%.0f\n", h.posX, h.posY);
+                        if (const char *dn = getenv("BOT_DOWN")) { py += atof(dn); h.posY = py; send_packet(peer, h); printf("moved down to %.0f\n", py); } // BOT_DOWN=<pixels>
+                        if (const char *brk = getenv("BOT_BREAK")) // BOT_BREAK=<n>: punch the n tiles below until foreground and background are gone
+                            for (int dy = 1; dy <= atoi(brk); ++dy)
+                                for (int hit = 0; hit < 16; ++hit)
+                                {
+                                    GamePacket pu; pu.type = 0x03; pu.netID = netid; pu.itemID = 18; pu.tileX = (int)h.posX / 32; pu.tileY = (int)py / 32 + dy; pu.posX = h.posX; pu.posY = h.posY;
+                                    send_packet(peer, pu);
+                                    auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(600); // service returns early whenever the server sends something, so wait out the full interval
+                                    while (std::chrono::steady_clock::now() < until) { ENetEvent e3; if (enet_host_service(host, &e3, 50) > 0 && e3.type == ENET_EVENT_TYPE_RECEIVE) enet_packet_destroy(e3.packet); }
+                                }
+                    } }
                 else if (fn == "OnConsoleMessage")
                 {
                     printf("console: %s\n", v[1].c_str());

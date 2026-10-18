@@ -301,7 +301,7 @@ static void vend_buy_dialog(Player *p, World &w, int x, int y)
 static void vend_wrench(Player *p, World &w, int x, int y)
 {
     Vend v = vend_of(*w.at(x, y));
-    if (v.owner == p->acct->user_id || v.owner == 0 || world_admin(w, p)) vend_owner_dialog(p, w, x, y); else vend_buy_dialog(p, w, x, y);
+    if (v.owner == p->acct->user_id || v.owner == 0) vend_owner_dialog(p, w, x, y); else vend_buy_dialog(p, w, x, y);
 }
 
 static void vend_dialog_return(Player *p, World &w, const std::string &name, const std::string &text)
@@ -310,6 +310,7 @@ static void vend_dialog_return(Player *p, World &w, const std::string &name, con
     if (!t || !S.items.get(t->fg) || S.items.get(t->fg)->type != 62) return;
     Account &a = *p->acct; Vend v = vend_of(*t); int price = vend_price(*t);
     auto line = [&](const std::string &msg) { bubble_all(w, p, msg); broadcast(w.name, [&](Player *q) { console(q, msg); }); };
+    if (!field(text, "expectprice").empty()) LOG("[vending] %s: buycount=%s verify=%s expect=%s/%s machine item %d stock %d price %d owner %d ready in %ld s\n", p->name().c_str(), field(text, "buycount").c_str(), field(text, "verify").c_str(), field(text, "expectprice").c_str(), field(text, "expectitem").c_str(), v.item, v.stock, price, v.owner, (long)(v.ready - now_s()));
     if (!field(text, "expectprice").empty()) // a visitor's answer: the real server asks twice (amount, then a confirmation)
     {
         if (v.owner == a.user_id) { console(p, "`oThis is your own machine: wrench it to restock or collect.``"); return; }
@@ -326,11 +327,11 @@ static void vend_dialog_return(Player *p, World &w, const std::string &name, con
             n = packs * pack;
         }
         int cost = price > 0 ? price * n : n / (-price); const Item *it = S.items.get(v.item);
-        if (n < 1) { vend_buy_dialog(p, w, x, y); return; }
+        if (n < 1) { bubble(p, p, "`4Enter how many you want to buy.``"); vend_buy_dialog(p, w, x, y); return; }
         if (wl_total(a) < cost) { bubble(p, p, "`4You can't afford that.``"); console(p, "`4You can't afford that: you need `w" + std::to_string(cost) + "`` World Locks.``"); return; }
         if ((!inv_count(a, v.item) && a.inv.size() >= a.backpack) || inv_count(a, v.item) + n > std::max<int>(1, it->max_amount))
         { call(p->peer, {"OnTalkBubble", U32{(u32)p->netid}, "You don't have room in your backpack!", U32{0}, U32{1}}); console(p, "You don't have room in your backpack!"); return; }
-        if (field(text, "verify") != "1")
+        if (atoi(field(text, "verify").c_str()) != 1)
         {
             dialog(p, "set_default_color|`o\nadd_label_with_icon|big|`wPurchase Confirmation``|left|1366|\nadd_spacer|small|\nembed_data|tilex|" + std::to_string(x) + "\nembed_data|tiley|" + std::to_string(y) + "\nadd_spacer|small|\n"
                       "add_textbox|`4You'll give:``|left|\nadd_spacer|small|\nadd_label_with_icon|small|(`w" + std::to_string(cost) + "``) `8World Locks``|left|242|\nadd_spacer|small|\nadd_textbox|`2You'll get:``|left|\nadd_spacer|small|\n"
